@@ -1,8 +1,8 @@
-name: Build YouTubeTLDR image (release-only)
+name: Build YouTubeTLDR (release-only)
 
 on:
   schedule:
-    - cron: "17 3 * * *" # daily check; builds only on new releases
+    - cron: "17 3 * * *" # daily check; it will only BUILD when a new upstream release appears
   workflow_dispatch:
     inputs:
       force:
@@ -24,21 +24,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout this repo (contains Dockerfile)
+        uses: actions/checkout@v4
+
       - name: Install jq
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Determine latest upstream release tag
+      - name: Determine latest upstream release version
         id: upstream
         run: |
           set -euo pipefail
-
           RELEASE_JSON="$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest")"
-          UPSTREAM_TAG="$(echo "$RELEASE_JSON" | jq -r .tag_name)"     # e.g. v1.6.0
-          VERSION="${UPSTREAM_TAG#v}"                                  # e.g. 1.6.0
-
-          echo "upstream_tag=$UPSTREAM_TAG" >> "$GITHUB_OUTPUT"
+          TAG="$(echo "$RELEASE_JSON" | jq -r .tag_name)"   # e.g. v1.6.0
+          VERSION="${TAG#v}"                                 # e.g. 1.6.0
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
@@ -48,7 +49,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check if this version tag already exists in GHCR
+      - name: Check if version tag already exists in GHCR
         id: exists
         run: |
           set +e
@@ -70,16 +71,13 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout this wrapper repo (contains Dockerfile)
-        if: steps.decide.outputs.should_build == 'true'
-        uses: actions/checkout@v4
-
-      - name: Build and push image (musl, Alpine)
+      - name: Build and push image (amd64)
         if: steps.decide.outputs.should_build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          # Uses the Dockerfile at repo root by default when context is "." [web:133]
           build-args: |
             TLDR_VERSION=${{ steps.upstream.outputs.version }}
           tags: |
@@ -88,4 +86,8 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ env.UPSTREAM_REPO }}
             org.opencontainers.image.version=${{ steps.upstream.outputs.version }}
-            org.opencontainers.image.title=YouTubeTLDR
+
+      - name: Summary
+        run: |
+          echo "Upstream version: ${{ steps.upstream.outputs.version }}"
+          echo "Built: ${{ steps.decide.outputs.should_build }}"

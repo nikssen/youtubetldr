@@ -66,15 +66,11 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build and push (from upstream release tag)
-        if: steps.decide.outputs.should_build == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: https://github.com/${{ env.UPSTREAM_REPO }}.git#${{ steps.upstream.outputs.tag }}
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.upstream.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:release
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ env.UPSTREAM_REPO }}
-            org.opencontainers.image.version=${{ steps.upstream.outputs.version }}
+- name: Pull & re-tag upstream image
+  if: steps.skip.outputs.skip != 'true'
+  run: |
+    docker pull milkshiift/youtubetldr:${{ steps.upstream.outputs.tag }}
+    docker tag milkshiift/youtubetldr:${{ steps.upstream.outputs.tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.upstream.outputs.version }}
+    docker tag milkshiift/youtubetldr:${{ steps.upstream.outputs.tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:release
+    docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.upstream.outputs.version }}
+    docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:release

@@ -2,8 +2,8 @@ name: Build YouTubeTLDR image (release-only)
 
 on:
   schedule:
-    - cron: "17 3 * * *"   # daily check; build happens only if new release exists
-  workflow_dispatch: {}
+    - cron: "17 3 * * *"        # daily check; builds only when new release exists
+  workflow_dispatch: {}         # allow manual "Run workflow" button
 
 permissions:
   contents: read
@@ -16,25 +16,16 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Determine latest upstream release + amd64 asset URL
+      - name: Determine latest upstream release + tag
         id: upstream
         run: |
           set -euo pipefail
           RELEASE_JSON="$(curl -fsSL https://api.github.com/repos/Milkshiift/YouTubeTLDR/releases/latest)"
           TAG="$(echo "$RELEASE_JSON" | jq -r .tag_name | sed 's/^v//')"
 
-          # Pick the Linux amd64/x86_64 binary asset from the upstream release.
-          ASSET_URL="$(echo "$RELEASE_JSON" | jq -r --arg filename "YouTubeTLDR-v1.5.0-linux-amd64" '
-            .assets[] | select(.name == $filename) | .browser_download_url')"
-
-          if [ -z "${ASSET_URL:-}" ] || [ "$ASSET_URL" = "null" ]; then
-            echo "Could not auto-detect the Linux amd64 asset URL. Adjust the jq filters to match the release asset name."
-            exit 1
-          fi
-
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -51,19 +42,14 @@ jobs:
           echo "present=$?" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Checkout (contains Dockerfile)
-        if: steps.exists.outputs.present != '0'
-        uses: actions/checkout@v4
-
+      # Build from Milkshiift repo at that tag, using its Dockerfile
       - name: Build and push (amd64)
         if: steps.exists.outputs.present != '0'
         uses: docker/build-push-action@v6
         with:
-          context: .
+          # Use upstream repo at release tag as build context
+          context: https://github.com/Milkshiift/YouTubeTLDR.git#v${{ steps.upstream.outputs.tag }}
           push: true
-          build-args: |
-            TLDR_VERSION=${{ steps.upstream.outputs.tag }}
-            TLDR_URL=${{ steps.upstream.outputs.asset_url }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.upstream.outputs.tag }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:release

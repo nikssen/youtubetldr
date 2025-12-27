@@ -1,0 +1,26 @@
+ARG BINARY_URL
+ARG VERSION
+
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS downloads
+RUN apk add --no-cache ca-certificates curl openssl
+
+# Create non-root user
+RUN addgroup -g 1001 -S appuser && \
+    adduser -S appuser -u 1001 -G appuser
+USER appuser
+
+# Download the upstream release binary
+WORKDIR /app
+RUN curl -fsSL "$BINARY_URL" -o YouTubeTLDR && \
+    chmod +x YouTubeTLDR
+
+EXPOSE 8000
+ENV PORT=8000
+VOLUME ["/data"]
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1
+
+CMD ["./YouTubeTLDR"]

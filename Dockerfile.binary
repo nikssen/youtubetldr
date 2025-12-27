@@ -1,19 +1,24 @@
+# 1. Declare ARGs at the top if you want them available globally (optional but good practice)
 ARG BINARY_URL
 ARG VERSION
 
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS downloads
+# 2. You MUST re-declare ARGs after FROM to use them in this stage
+ARG BINARY_URL
+ARG VERSION
+
 RUN apk add --no-cache ca-certificates curl openssl
 
-# Create non-root user
 RUN addgroup -g 1001 -S appuser && \
     adduser -S appuser -u 1001 -G appuser
 USER appuser
 
-# Download the upstream release binary
 WORKDIR /app
-RUN curl -fsSL "$BINARY_URL" -o YouTubeTLDR && \
+
+# 3. Echo the URL to debug (so you can see it in logs if it fails again)
+RUN echo "Downloading from: $BINARY_URL" && \
+    curl -fsSL "$BINARY_URL" -o YouTubeTLDR && \
     chmod +x YouTubeTLDR
 
 EXPOSE 8000

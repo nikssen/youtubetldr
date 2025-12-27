@@ -1,8 +1,8 @@
-name: Build YouTubeTLDR (release-only)
+name: Build YouTubeTLDR (release-only, upstream Dockerfile)
 
 on:
   schedule:
-    - cron: "17 3 * * *" # daily check; it will only BUILD when a new upstream release appears
+    - cron: "17 3 * * *"        # daily check; builds only when new release exists
   workflow_dispatch:
     inputs:
       force:
@@ -24,9 +24,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout this repo (contains Dockerfile)
-        uses: actions/checkout@v4
-
       - name: Install jq
         run: |
           sudo apt-get update
@@ -71,23 +68,17 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build and push image (amd64)
+      - name: Build and push image (using upstream Dockerfile)
         if: steps.decide.outputs.should_build == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: .
+          # Build directly from the upstream repo at the release tag.
+          # Docker will use that repo's Dockerfile by default.
+          context: https://github.com/${{ env.UPSTREAM_REPO }}.git#${{ steps.upstream.outputs.tag }}
           push: true
-          # Uses the Dockerfile at repo root by default when context is "." [web:133]
-          build-args: |
-            TLDR_VERSION=${{ steps.upstream.outputs.version }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.upstream.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:release
           labels: |
             org.opencontainers.image.source=https://github.com/${{ env.UPSTREAM_REPO }}
             org.opencontainers.image.version=${{ steps.upstream.outputs.version }}
-
-      - name: Summary
-        run: |
-          echo "Upstream version: ${{ steps.upstream.outputs.version }}"
-          echo "Built: ${{ steps.decide.outputs.should_build }}"

@@ -1,6 +1,5 @@
 FROM debian:bookworm-slim
 
-ARG TLDR_VERSION
 ARG TLDR_URL
 
 RUN apt-get update \
@@ -15,4 +14,3 @@ ENV TLDR_IP=0.0.0.0
 ENV TLDR_PORT=8000
 
 ENTRYPOINT ["/usr/local/bin/YouTubeTLDR"]
-
